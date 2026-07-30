@@ -1,8 +1,42 @@
+/**
+ ASUH Orrery main.js:
+  1. builds the scene, camera and lights
+  2. builds the bodies from JSON
+  3. switch planets over to real ephemeris positions
+  4. connects the UI
+  5. runs the animation loop
+
+Planets are positioned from JPL orbital elements (see kepler_approx_location.js).
+Moons use simple circular orbits, which is plenty at the scale they render.
+ */
+
 import * as THREE from 'three';
-import gsap from 'gsap';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { renderer, resizeRendererToDisplaySize } from './renderer.js';
-import { buildSystem, createSun, boundingBoxSizing} from './scene/bodies.js';
+
+import planetData from '/data/planets.json';
+import moonData from '/data/moons.json';
+import facts from '/data/facts.json';
+import keplerData from '/data/kepler_variables.json';
+
+import { renderer, resizeRendererToDisplaySize } from './systems/renderer.js';
+import { buildSystem, createSun } from './scene/bodies.js';
+import { createSelection } from './systems/selection.js';
+import { createClock } from './systems/time.js';
+import { centuriesSinceJ2000, heliocentricPosition, sampleOrbit, toSceneUnits } from './systems/kepler_approx_location.js';
+
+import { createTopBar } from './ui/topbar.js';
+import { createTimeSlider } from './ui/timeslider.js';
+import { createBodyLabel } from './ui/label.js';
+import { createFactSheet } from './ui/factsheet.js';
+import { createSearch } from './ui/search.js';
+
+const PLANET_ELEMENTS = keplerData.planets;
+
+const TWO_PI = Math.PI * 2;
+const MAX_SPIN_STEP = 0.25;      // radians per frame; stops fast spin flickering
+const MOON_RING_VISIBLE_DIST = 250;
+
+// ------------------------------ 1. scene
 
 const scene = new THREE.Scene();
 
@@ -14,24 +48,98 @@ controls.enableDamping = true;
 controls.dampingFactor = 0.05;
 controls.minDistance = 5;
 
+// decay set as 0 so no falloff with distance. Neptune is lit as brightly as Mercury. Default leaves the outer planets black.
 scene.add(new THREE.PointLight(0xffffff, 4, 0, 0));
 scene.add(new THREE.AmbientLight(0xffffff, 0.06));
 
-const [planetData, moonData] = await Promise.all([
-  fetch('/data/planets.json').then(r => r.json()),
-  fetch('/data/moons.json').then(r => r.json()),
-]);
+// ---------------------------------- 2. bodies
 const { bodies, nameIndex } = buildSystem(planetData, moonData, scene);
 
 const sunMesh = createSun(scene);
-sunMesh.userData.body = 'sun';
-nameIndex.set('sun', {data: { name: 'sun', radius: 12, parent: null }, pivot: sunMesh, mesh: sunMesh,});
+nameIndex.set('sun', {
+  data: { name: 'sun', radius: 12, parent: null },
+  pivot: sunMesh,
+  mesh: sunMesh,
+});
 
-let simTimeDays = 0;
-let timeScale = 1;
-const MAX_SPIN_STEP = 0.25;
-const clock = new THREE.Clock();
-const tmp = new THREE.Vector3();
+const planets = bodies.filter(body => !body.data.parent);
+const moons = bodies.filter(body => body.data.parent);
+
+// --------------------- 3. ephemeris
+
+/**
+ * Hand each planet over to the real ephemeris.
+ *
+ * Kepler returns an absolute position in ecliptic space, so every transform
+ * above the pivot has to be identity — otherwise we would be rotating a
+ * position that is already correct. Inclination now comes from the elements.
+ */
+function useRealOrbits() {
+  const epoch = centuriesSinceJ2000(new Date());
+
+  for (const body of planets) {
+    const elements = PLANET_ELEMENTS[body.data.name];
+    if (!elements) {
+      console.warn('No orbital elements for', body.data.name);
+      continue;
+    }
+
+    body.orbitPlane.rotation.set(0, 0, 0);
+    body.orbitAnchor.rotation.set(0, 0, 0);
+
+    // Swap a base circular ring for the planet's real elliptical path.
+    const path = sampleOrbit(elements, epoch).map(point => toSceneUnits(point, new THREE.Vector3()));
+    body.orbitRing.geometry = new THREE.BufferGeometry().setFromPoints(path);
+    body.orbitRing.scale.setScalar(1);   // path is already in scene units
+  }
+}
+
+/**
+ Moon periods span 85:1, from Phobos at 7.6 hours to our Moon at 27 days. At any speed where the Moon is watchable, Phobos is a blur. So compress the spread the same way distances are compressed. a power law that keeps the ordering exact, anchored so our Moon keeps its true period.
+ Set MOON_PERIOD_EXP to 1 for uncompressed rates.
+ */
+const MOON_PERIOD_EXP = 0.5;
+const MOON_PERIOD_ANCHOR = 27.3217;   // days
+
+function computeMoonPeriods() {
+  for (const body of moons) {
+    body.visualPeriod =
+      Math.pow(body.data.orbitalPeriod, MOON_PERIOD_EXP) *
+      Math.pow(MOON_PERIOD_ANCHOR, 1 - MOON_PERIOD_EXP);
+  }
+}
+
+useRealOrbits();
+computeMoonPeriods();
+
+// ------------- 4. ui
+
+const simClock = createClock({ initialScale: 1 });   // 1 sec = 1 day
+const topBar = createTopBar();
+const bodyLabel = createBodyLabel();
+const factSheet = createFactSheet(facts);
+
+createTimeSlider(simClock);
+
+//from class to select objects
+const selection = createSelection({ camera, controls, bodies, nameIndex, sunMesh, domElement: renderer.domElement,
+  onChange: body => { bodyLabel.show(body); factSheet.show(body); }
+});
+createSearch({ bodies, nameIndex, onSelect: name => selection.selectByName(name) });
+
+// ------------------------------------ 5. Animation loop
+
+const frameClock = new THREE.Clock();
+const positionAU = new THREE.Vector3();
+const parentPos = new THREE.Vector3();
+
+/**
+ Rotate a body on its axis.msimDelta is simulated days elapsed this frame, and is already 0 when paused, so spin stops without needing its own check. The clamp is two-sided because time can run backwards.
+ */
+function spin(body, period, simDelta) {
+  const step = (simDelta / period) * TWO_PI;
+  body.mesh.rotation.y += Math.max(-MAX_SPIN_STEP, Math.min(step, MAX_SPIN_STEP));
+}
 
 function animate() {
   requestAnimationFrame(animate);
@@ -42,107 +150,38 @@ function animate() {
     camera.updateProjectionMatrix();
   }
 
-  const dt = clock.getDelta();
-  simTimeDays += dt * timeScale;
+  const dt = frameClock.getDelta();
+  const simDelta = simClock.step(dt);
+  const centuries = centuriesSinceJ2000(simClock.date);
 
-  for (const b of bodies) {
-    b.orbitAnchor.rotation.y = (simTimeDays / b.data.orbitalPeriod) * Math.PI * 2;
-    const step = (dt * timeScale / b.data.rotationPeriod) * Math.PI * 2;
-    b.mesh.rotation.y += Math.min(step, MAX_SPIN_STEP);
-
-    //hides orbit rings of moons if camera is far away
-    if (!b.data.parent) continue;
-    nameIndex.get(b.data.parent).pivot.getWorldPosition(tmp);
-    b.orbitRing.visible = tmp.distanceTo(camera.position) < 250;
+  // planets: real heliocentric positions
+  for (const body of planets) {
+    const elements = PLANET_ELEMENTS[body.data.name];
+    if (elements) {
+      heliocentricPosition(elements, centuries, positionAU);
+      toSceneUnits(positionAU, body.pivot.position);
+    }
+    spin(body, body.data.rotationPeriod, simDelta);
   }
 
-  updateFollow();
+  // moons: circular orbits around their parent. Spin shares visualPeriod with the orbit, so tidally locked moons keep facing their planet.
+  for (const body of moons) {
+    body.orbitAnchor.rotation.y = (simClock.days / body.visualPeriod) * TWO_PI;
+    spin(body, body.visualPeriod, simDelta);
+
+    nameIndex.get(body.data.parent).pivot.getWorldPosition(parentPos);
+    body.orbitRing.visible =
+      parentPos.distanceTo(camera.position) < MOON_RING_VISIBLE_DIST;
+  }
+
+  topBar.update(simClock.date);
+  selection.update();
   controls.update();
+
+  bodyLabel.update(camera, renderer.domElement);
+  factSheet.update(camera, renderer.domElement);
+
   renderer.render(scene, camera);
-}
-
-//raycaster to shoot out and see if theres a 3d object where the 2d click is at
-const clickables = [sunMesh, ...bodies.filter(b => !b.data.parent).map(b => b.boundingBox)];
-const raycaster = new THREE.Raycaster();
-const pointer = new THREE.Vector2();
-let focused = null;
-let selected = null;
-const goal = new THREE.Vector3();
-const offset = new THREE.Vector3();
-let downPos = null;
-
-
-renderer.domElement.addEventListener('pointerdown', e => {
-  downPos = {x: e.clientX, y: e.clientY};
-});
-renderer.domElement.addEventListener('pointerup', e => {
-  if (!downPos) return;
-  const moved = Math.hypot(e.clientX - downPos.x, e.clientY - downPos.y);
-  downPos = null;
-  if (moved > 5) return; //checked if mouse dragged
-
-  //converting pixels to camera space
-  const rect = renderer.domElement.getBoundingClientRect();
-  pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-  pointer.y = -((e.clientY - rect.top)  / rect.height) * 2 + 1;
-  console.log(pointer.x.toFixed(2), pointer.y.toFixed(2)); // <-- remove later
-  boundingBoxSizing(bodies, camera, rect.height);
-  raycaster.setFromCamera(pointer, camera);
-  const hit = raycaster.intersectObjects(clickables, false)[0];
-  const body = hit && nameIndex.get(hit.object.userData.body);
-  if (body) zoomTo(body);
-  else if (hit) console.warn('No body registered for', hit.object.userData.body);
-  else if (selected) zoomOut();
-});
-//https://discourse.threejs.org/t/simple-zoom-to-selected-object-in-the-scene-with-controls-and-camera-and-tweenjs/38824/4
-function zoomTo(body) {
-  gsap.killTweensOf([camera.position, controls.target]); //kills other clicks ongoing
-  selected = body;
-  focused = null;
-  controls.enabled = false;
-  //bounding box around object
-  const aabb = new THREE.Box3().setFromObject(body.mesh);
-  const center = aabb.getCenter(new THREE.Vector3());
-  const dist = aabb.getSize(new THREE.Vector3()).length();
-
-  gsap.to(camera.position, {
-    duration: 1,
-    ease: 'power2.inOut',
-    x: center.x,
-    y: center.y + dist * 0.3,
-    z: center.z + dist,
-  });
-
-  gsap.to(controls.target, {
-    duration: 1,
-    ease: 'power2.inOut',
-    x: center.x, y: center.y, z: center.z,
-    onComplete: () => {
-      controls.enabled = true;
-      controls.minDistance = body.data.radius * 1.5;
-      focused = body;                         // hand over to the follow
-    },
-  });
-}
-
-function zoomOut() {
-  gsap.killTweensOf([camera.position, controls.target]);
-  selected = null;
-  focused = null;
-  controls.enabled = false;
-  gsap.to(camera.position, { duration: 1, ease: 'power2.inOut', x: 0, y: 140, z: 340 });
-  gsap.to(controls.target, {
-    duration: 1, ease: 'power2.inOut', x: 0, y: 0, z: 0,
-    onComplete: () => { controls.enabled = true; controls.minDistance = 5; },
-  });
-}
-
-function updateFollow() {
-  if (!focused) return;
-  focused.pivot.getWorldPosition(goal);
-  offset.copy(camera.position).sub(controls.target);
-  controls.target.lerp(goal, 0.15);
-  camera.position.copy(controls.target).add(offset);
 }
 
 animate();

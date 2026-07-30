@@ -15,10 +15,38 @@
   </head>
   
   <body>
-    <div id="app"></div>
-    
-  
-    <div id="info">Description</div>
+    <header id="topbar">
+      <span id="site-name">ASUH Orrery</span>
+
+      <div id="search">
+        <input id="search-input" type="search" placeholder="Search bodies"
+               autocomplete="off" spellcheck="false" aria-label="Search bodies" />
+        <ul id="search-results" hidden></ul>
+      </div>
+
+      <span class="field">
+        <span class="key">Date</span>
+        <time id="sim-clock"></time>
+      </span>
+      <a id="portfolio-link" href="https://example.com" target="_blank" rel="noopener">Portfolio</a>
+    </header>
+
+    <aside id="factsheet" hidden></aside>
+
+    <div id="body-label" hidden>
+      <span id="body-label-name"></span>
+      <span id="body-label-sub"></span>
+    </div>
+
+    <div id="time-controls">
+      <button id="play-pause" type="button">Pause</button>
+      <input id="time-scale" type="range" step="1" aria-label="Time scale" />
+      <span class="field">
+        <span class="key">Rate</span>
+        <span id="time-scale-label">1 sec = 1 day</span>
+      </span>
+      <button id="time-reset" type="button">live</button>
+    </div>
     <script type="module" src="./src/main.js"></script>
   </body>
 </html>

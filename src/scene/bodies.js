@@ -41,7 +41,7 @@ function buildMaterial(data) {
 
 function buildBody(data, parent) {
   const orbitPlane = new THREE.Object3D();
-  orbitPlane.rotation.x = THREE.MathUtils.degToRad(data.orbitInclination);
+  orbitPlane.rotation.x = THREE.MathUtils.degToRad(data.orbitInclination ?? 0);
   parent.add(orbitPlane);
 
   //builds orbital ring
@@ -58,7 +58,7 @@ function buildBody(data, parent) {
   orbitAnchor.add(pivot);
 
   const tilt = new THREE.Object3D();
-  tilt.rotation.z = THREE.MathUtils.degToRad(data.axialTilt);
+  tilt.rotation.z = THREE.MathUtils.degToRad(data.axialTilt ?? 0);
   pivot.add(tilt);
 
   const mesh = new THREE.Mesh(sharedSphereGeometry, buildMaterial(data));
@@ -70,7 +70,7 @@ function buildBody(data, parent) {
   boundingBox.userData.body = data.name;
   pivot.add(boundingBox);
 
-  return { data, orbitAnchor, pivot, mesh, boundingBox, orbitRing};
+  return { data, orbitPlane, orbitAnchor, pivot, mesh, boundingBox, orbitRing};
 
 }
 

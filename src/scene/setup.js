@@ -1,1 +1,0 @@
-// for the renderer, camera, lights, and resize handling

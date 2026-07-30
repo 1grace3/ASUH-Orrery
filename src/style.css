@@ -1,13 +1,493 @@
-html, body { margin: 0; height: 100%; }
-canvas { display: block; width: 100%; height: 100%; }
 
-#info {
-    color: "blue";
-    /* position: absolute; */
-    top: 10px;
-    width: 100%;
-    text-align: center;
-    z-index: 1;
-    display:block;
+:root {
+  --bg:      #000;
+  --line:    #2c2c29;
+  --line-lit:#4a4a45;
+  --text:    #d6d6cf;
+  --dim:     #82827a;
+  --faint:   #55554f;
+
+  --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
 }
 
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  overflow: hidden;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body { height: 100dvh; }
+
+canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+
+.key {
+  color: var(--faint);
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: 0.6875rem;
+  margin-right: 0.6em;
+}
+
+.field {
+  display: inline-flex;
+  align-items: baseline;
+}
+
+
+#topbar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 10;
+
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+  padding: 0.6rem 1rem;
+
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  color: var(--text);
+  border-bottom: 1px solid var(--line);
+
+  pointer-events: none;
+}
+
+#topbar > * { pointer-events: auto; }
+
+#site-name {
+  text-transform: uppercase;
+  letter-spacing: 0.22em;
+}
+
+#sim-clock {
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+#topbar .field { margin-left: auto; }
+
+#portfolio-link {
+  color: var(--dim);
+  text-decoration: none;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: 0.6875rem;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 1px;
+}
+
+#portfolio-link:hover {
+  color: var(--text);
+  border-bottom-color: var(--line-lit);
+}
+
+/* ---------------------------------------------------------------- search */
+
+#search { position: relative; }
+
+#search-input {
+  width: 13rem;
+  padding: 0.25rem 0 0.25rem 0.1rem;
+
+  font: inherit;
+  font-size: 0.75rem;
+  color: var(--text);
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  outline: none;
+
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+#search-input::placeholder {
+  color: var(--faint);
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: 0.6875rem;
+}
+
+#search-input:focus { border-bottom-color: var(--line-lit); }
+
+#search-input::-webkit-search-cancel-button { -webkit-appearance: none; }
+
+#search-results {
+  position: absolute;
+  top: calc(100% + 0.4rem);
+  left: 0;
+  min-width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  background: var(--bg);
+  border: 1px solid var(--line);
+}
+
+#search-results[hidden] { display: none; }
+
+#search-results li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1.5rem;
+  padding: 0.35rem 0.6rem;
+
+  font-size: 0.75rem;
+  color: var(--dim);
+  border-bottom: 1px solid var(--line);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+#search-results li:last-child { border-bottom: none; }
+
+#search-results li:hover,
+#search-results li.is-active {
+  color: var(--text);
+  background: #111110;
+}
+
+#search-results .key { margin-right: 0; }
+
+/* ------------------------------------------------------------- fact sheet */
+
+#factsheet {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 8;
+
+  width: 20rem;
+  max-height: 70vh;
+  overflow-y: auto;
+  padding: 0.9rem 1rem;
+
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  line-height: 1.55;
+  color: var(--text);
+  background: rgba(0, 0, 0, 0.62);
+  border: 1px solid var(--line);
+}
+
+#factsheet[hidden] { display: none; }
+
+/* minimized: header only, and it shrinks to fit the title */
+#factsheet.is-min {
+  width: auto;
+  max-height: none;
+  overflow: visible;
+  padding-bottom: 0.9rem;
+}
+
+#factsheet.is-min .fs-header { padding-bottom: 0; border-bottom: none; }
+#factsheet.is-min > :not(.fs-header) { display: none; }
+
+.fs-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.fs-titles { flex: 1; min-width: 0; }
+
+.fs-min {
+  flex: 0 0 auto;
+  width: 1.4rem;
+  height: 1.4rem;
+  margin: -0.15rem -0.2rem 0 0;
+
+  font: inherit;
+  font-size: 0.875rem;
+  line-height: 1;
+  color: var(--dim);
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 0;
+  cursor: pointer;
+}
+
+.fs-min:hover,
+.fs-min:active { color: var(--text); border-color: var(--line-lit); }
+
+.fs-name {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 400;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+}
+
+.fs-type {
+  margin: 0.25rem 0 0;
+  font-size: 0.625rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--faint);
+}
+
+.fs-overview { margin: 0.8rem 0 0; color: var(--dim); }
+
+.fs-stats {
+  display: grid;
+  grid-template-columns: minmax(7rem, auto) 1fr;
+  gap: 0;
+  margin: 0.9rem 0 0;
+}
+
+.fs-stats dt {
+  padding: 0.3rem 0.75rem 0.3rem 0;
+  border-top: 1px solid var(--line);
+}
+
+.fs-stats dd {
+  margin: 0;
+  padding: 0.3rem 0;
+  border-top: 1px solid var(--line);
+  font-variant-numeric: tabular-nums;
+}
+
+.fs-note {
+  margin-top: 0.9rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--line);
+}
+
+.fs-note p { margin: 0.35rem 0 0; color: var(--dim); }
+
+/* ---------------------------------------------------- selected body label */
+
+#body-label {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 9;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  padding-bottom: 0.55rem;
+
+  font-family: var(--mono);
+  color: var(--text);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+#body-label[hidden] { display: none; }
+
+/* hairline dropping from the label down toward the body */
+#body-label::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  height: 0.45rem;
+  background: var(--line-lit);
+}
+
+#body-label-name {
+  font-size: 0.8125rem;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  padding: 0 0.1em 0.2rem;
+  border-bottom: 1px solid var(--line-lit);
+}
+
+#body-label-sub {
+  font-size: 0.625rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--faint);
+}
+
+/* ---------------------------------------------------------- time controls */
+
+#time-controls {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 10;
+
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 0.6rem 1rem;
+
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  color: var(--text);
+  border-top: 1px solid var(--line);
+
+  pointer-events: none;
+}
+
+#time-controls > * { pointer-events: auto; }
+
+#time-controls button {
+  min-width: 4.5rem;
+  padding: 0.28rem 0.6rem;
+
+  font: inherit;
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--dim);
+
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 0;
+  cursor: pointer;
+}
+
+/* :active matters on touch, where :hover never fires */
+#time-controls button:hover,
+#time-controls button:active {
+  color: var(--text);
+  border-color: var(--line-lit);
+}
+
+#time-scale-label {
+  font-variant-numeric: tabular-nums;
+  min-width: 18ch;              /* fits "1 sec = -12 months" without reflowing */
+}
+
+#time-controls .field { margin-left: auto; }
+
+/* Range input rebuilt as a hairline track with a square tick.
+   Both vendor prefixes are required; there is no shared syntax. */
+
+#time-scale {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16rem;
+  height: 13px;
+  background: transparent;
+  cursor: pointer;
+}
+
+#time-scale::-webkit-slider-runnable-track {
+  height: 1px;
+  background: var(--line-lit);
+}
+
+#time-scale::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 3px;
+  height: 13px;
+  margin-top: -6px;
+  background: var(--text);
+  border: none;
+  border-radius: 0;
+}
+
+#time-scale::-moz-range-track {
+  height: 1px;
+  background: var(--line-lit);
+}
+
+#time-scale::-moz-range-thumb {
+  width: 3px;
+  height: 13px;
+  background: var(--text);
+  border: none;
+  border-radius: 0;
+}
+
+#time-scale:focus-visible { outline: 1px solid var(--line-lit); outline-offset: 4px; }
+
+/* ---------------------------------------------------------------- mobile */
+
+@media (max-width: 640px) {
+  /* Top bar wraps to two lines: name and link, then the epoch beneath.
+     env(safe-area-inset-*) keeps content clear of notches and home bars. */
+  #topbar {
+    flex-wrap: wrap;
+    gap: 0.35rem 1rem;
+    padding: 0.5rem 0.75rem;
+    padding-top: max(0.5rem, env(safe-area-inset-top));
+    font-size: 0.6875rem;
+  }
+
+  #site-name {
+    margin-right: auto;
+    letter-spacing: 0.16em;
+  }
+
+  #topbar .field {
+    order: 3;
+    width: 100%;
+    margin-left: 0;
+  }
+
+  /* search drops to its own row above the date */
+  #search { order: 2; width: 100%; }
+  #search-input { width: 100%; }
+  #search-results { max-height: 40vh; overflow-y: auto; }
+
+  /* anchoring makes no sense at this width: pin it as a bottom sheet.
+     JS checks the same breakpoint and skips positioning. */
+  #factsheet {
+    top: auto;
+    bottom: calc(6.5rem + env(safe-area-inset-bottom));   /* clears the time bar */
+    left: 0;
+    right: 0;
+    width: auto;
+    max-height: 40vh;
+    border-width: 1px 0;
+    transform: none !important;
+  }
+
+  /* Slider gets its own full-width row above the buttons */
+  #time-controls {
+    flex-wrap: wrap;
+    gap: 0.5rem 0.75rem;
+    padding: 0.5rem 0.75rem;
+    padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+    font-size: 0.6875rem;
+  }
+
+  #time-scale {
+    order: -1;
+    width: 100%;
+    height: 36px;          /* the whole track becomes a drag target for a thumb */
+  }
+
+  #time-controls button {
+    min-width: 0;
+    flex: 0 0 auto;
+    padding: 0.6rem 0.9rem;   /* ~40px tall, near the 44px touch guideline */
+  }
+
+  #time-controls .field { margin-left: auto; }
+
+  #time-scale-label { min-width: 0; }
+
+  /* the body name plate shrinks so it does not span the screen */
+  #body-label-name { font-size: 0.75rem; letter-spacing: 0.14em; }
+  #body-label-sub  { font-size: 0.5625rem; }
+}
+
+/* Landscape phones: height is the scarce dimension, so flatten the bars. */
+@media (max-height: 480px) and (orientation: landscape) {
+  #topbar, #time-controls { padding-top: 0.35rem; padding-bottom: 0.35rem; }
+  #time-scale { height: 24px; }
+  #time-controls button { padding: 0.35rem 0.7rem; }
+}
