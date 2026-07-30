@@ -27,7 +27,7 @@ export class Sun {
     this.glowMesh = new THREE.Mesh(glowGeometry, glowMaterial);
     this.mesh.add(this.glowMesh);
 
-    // ---- Wireframe ----
+    //Wireframe
     const wireMat = new THREE.MeshToonMaterial({
         color: 0xffffff,
         wireframe: true,
@@ -37,7 +37,7 @@ export class Sun {
     this.wireMesh.visible = false;
     this.mesh.add(this.wireMesh);
 
-    // ---- Wireframe Toggle ----
+    // Wireframe Toggle
     window.addEventListener('keydown', (e) => {
         if (e.key === 'w' || e.key === 'W') {
             this.wireMesh.visible = !this.wireMesh.visible;

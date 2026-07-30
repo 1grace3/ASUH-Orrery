@@ -1,4 +1,5 @@
-
+html, body { margin: 0; height: 100%; }
+canvas { display: block; width: 100%; height: 100%; }
 
 #info {
     color: "blue";
@@ -9,3 +10,4 @@
     z-index: 1;
     display:block;
 }
+
